@@ -18,9 +18,11 @@
 package org.apache.ignite.internal.processors.rest.protocols.tcp.redis;
 
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.ignite.testframework.GridTestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisDataException;
 
 import static org.apache.ignite.internal.util.IgniteUtils.KB;
 
@@ -75,6 +77,36 @@ public class RedisProtocolConnectSelfTest extends RedisCommonAbstractTest {
 
             jedis.select(0);
             Assert.assertEquals("v0", jedis.get("k0"));
+        }
+    }
+
+    /** */
+    @Test
+    public void testClient() {
+        try (Jedis jedis = pool.getResource()) {
+            Assert.assertNull(jedis.clientGetname());
+
+            Assert.assertEquals("OK", jedis.clientSetname("test-client"));
+            Assert.assertEquals("test-client", jedis.clientGetname());
+
+            // The name is connection-scoped.
+            try (Jedis jedis2 = pool.getResource()) {
+                Assert.assertNull(jedis2.clientGetname());
+            }
+
+            Assert.assertEquals("test-client", jedis.clientGetname());
+        }
+    }
+
+    /** */
+    @Test
+    public void testClientUnknownSubcommand() {
+        try (Jedis jedis = pool.getResource()) {
+            GridTestUtils.assertThrows(log, () -> jedis.clientUnpause(), JedisDataException.class,
+                "Unknown subcommand 'UNPAUSE' for 'client' command");
+
+            // The connection is still usable.
+            Assert.assertEquals("PONG", jedis.ping());
         }
     }
 
